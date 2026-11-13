@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DocuScan & PDF Studio - Single File HTML Scanner</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF CDN for client-side PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    .touch-none { touch-action: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans selection:bg-indigo-100">
+
+  <!-- Toast Banner -->
+  <div id="toastBanner" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-xl border border-slate-700 transition-all"></div>
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-slate-900 leading-tight">DocuScan HTML App</h1>
+          <p class="text-[11px] text-slate-500">100% Offline & Client-Side Scanner</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnExportAllPdf" onclick="exportToPdf()" class="hidden items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>PDF सेव करें (<span id="headerPageCount">0</span>)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl w-full mx-auto p-4 flex-1 flex flex-col gap-5">
+
+    <!-- Pages Tray Strip (Visible when pages > 0) -->
+    <div id="pagesTray" class="hidden bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs">
+      <div class="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-900 uppercase tracking-wide">दस्तावेज़ पेज (Scanned Pages)</span>
+          <span id="trayCountBadge" class="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">0 पेज</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnClearAll" onclick="clearAllPages()" class="text-[11px] text-slate-400 hover:text-rose-600 font-medium px-2 py-1 cursor-pointer">सभी हटाएं</button>
+          <button onclick="exportToPdf()" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 cursor-pointer">PDF डाउनलोड</button>
+        </div>
+      </div>
+      <div id="trayThumbnails" class="flex items-center gap-3 overflow-x-auto pb-2 pt-1 no-scrollbar"></div>
+    </div>
+
+    <!-- Active Page Studio / Operational Workspace -->
+    <div id="operationalStudio" class="hidden bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col items-center gap-4">
+      <div class="w-full flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+        <span class="text-sm font-bold text-slate-900">दस्तावेज़ पेज व्यूअर (Page Editor)</span>
+        <div class="flex items-center gap-2">
+          <button onclick="navigatePage(-1)" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer">← पिछला</button>
+          <span id="studioPageIndicator" class="text-xs font-bold font-mono text-indigo-600 px-2">1 / 1</span>
+          <button onclick="navigatePage(1)" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer">अगला →</button>
+          <button onclick="openAddPageModal()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg ml-1 cursor-pointer">+ नया स्कैन</button>
+        </div>
+      </div>
+
+      <div class="w-full max-h-[54vh] bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center p-2.5">
+        <img id="studioPreviewImg" src="" alt="Active page" class="max-h-[50vh] max-w-full object-contain rounded">
+      </div>
+
+      <div class="flex items-center justify-center gap-2.5 flex-wrap pt-1">
+        <button onclick="reEditActivePageCrop()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          <span>क्रॉप व सीधा करें</span>
+        </button>
+        <button onclick="reEditActivePageFilter()" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span>टेक्स्ट एन्हांस / फ़िल्टर</span>
+        </button>
+        <button onclick="rotateActivePage()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>घुमाएं</span>
+        </button>
+        <button onclick="downloadActivePageJpg()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-emerald-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>JPG डाउनलोड</span>
+        </button>
+        <button onclick="deleteActivePage()" class="px-3 py-2 bg-white hover:bg-rose-50 border border-slate-300 text-rose-600 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <span>हटाएं</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 1: Capture View -->
+    <div id="captureSection" class="w-full flex flex-col items-center gap-4">
+      <div class="flex items-center gap-1.5 p-1.5 bg-slate-200 rounded-2xl flex-wrap justify-center">
+        <label class="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer active:scale-95" title="फोन का मूल कैमरा खोलें">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>📸 फोन कैमरा (नो-क्रैश)</span>
+          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleFileInput(event)">
+        </label>
+        <button id="btnTabCamera" onclick="switchCaptureMode('camera')" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-white text-slate-900 shadow-xs cursor-pointer">
+          🎥 लाइव स्कैनर
+        </button>
+        <button id="btnTabUpload" onclick="switchCaptureMode('upload')" class="px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-900 cursor-pointer">
+          📁 गैलरी / फ़ाइलें
+        </button>
+      </div>
+
+      <!-- Live Camera Container -->
+      <div id="cameraContainer" class="w-full max-w-md bg-slate-950 rounded-2xl overflow-hidden p-3 shadow-lg flex flex-col items-center gap-3">
+        <div class="relative w-full aspect-[3/4] bg-black rounded-xl overflow-hidden flex items-center justify-center">
+          <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+          <div class="absolute inset-4 border-2 border-indigo-400/80 rounded-xl pointer-events-none flex flex-col justify-between p-2">
+            <span class="text-[10px] text-white/80 bg-black/50 px-2 py-0.5 rounded self-center">दस्तावेज़ को फ़्रेम में रखें</span>
+            <div class="w-full flex justify-between">
+              <div class="w-4 h-4 border-b-2 border-l-2 border-white"></div>
+              <div class="w-4 h-4 border-b-2 border-r-2 border-white"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button onclick="switchCameraFacing()" class="p-3 rounded-full bg-slate-800 text-white hover:bg-slate-700 cursor-pointer" title="Switch Camera">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+          <button onclick="captureSnapshot()" class="w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-4 border-white shadow-xl flex items-center justify-center cursor-pointer active:scale-95" title="Capture">
+            <div class="w-6 h-6 rounded-full bg-white"></div>
+          </button>
+          <label class="p-3 rounded-full bg-slate-800 text-white hover:bg-slate-700 cursor-pointer" title="Upload Photos">
+            <input type="file" multiple accept="image/*" class="hidden" onchange="handleFileInput(event)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </label>
+        </div>
+      </div>
+
+      <!-- File Upload Box -->
+      <div id="uploadContainer" class="hidden w-full max-w-lg bg-white border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center flex flex-col items-center justify-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        </div>
+        <h3 class="text-sm font-bold text-slate-800">एक या एक से अधिक इमेज चुनें</h3>
+        <p class="text-xs text-slate-500 max-w-xs">JPG, PNG या WebP फ़ाइलें। आप 2 या ज़्यादा इमेज चुनकर हर इमेज को क्रमशः क्रॉप व फ़िल्टर कर सकते हैं।</p>
+        <label class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl cursor-pointer shadow-sm">
+          फ़ाइलें चुनें (Choose Files)
+          <input type="file" multiple accept="image/*" class="hidden" onchange="handleFileInput(event)">
+        </label>
+      </div>
+    </div>
+
+    <!-- Step 2: Perspective Crop View (120 FPS + Opposite-Corner Loupe + Auto Edge Detect) -->
+    <div id="cropSection" class="hidden w-full flex flex-col items-center gap-3">
+      <div class="w-full flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <button onclick="cancelCrop()" class="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 cursor-pointer">पीछे (Cancel)</button>
+          <span id="cropBatchBadge" class="hidden text-xs font-mono font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full"></span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button onclick="autoCropAndProceed()" class="px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-indigo-600 rounded-xl shadow-xs cursor-pointer">⚡ 1-क्लिक ऑटो क्रॉप</button>
+          <button onclick="runAutoDetectOnCrop()" class="px-2.5 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl cursor-pointer">ऑटो किनारे</button>
+          <button onclick="autoFitCrop()" class="px-2.5 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-xl cursor-pointer">पूरा फ़्रेम</button>
+          <button onclick="rotateCropImage()" class="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xl text-slate-700 cursor-pointer">घुमाएं 90°</button>
+        </div>
+      </div>
+
+      <!-- Crop Viewport -->
+      <div id="cropViewport" class="relative w-full bg-slate-950 rounded-2xl overflow-hidden p-2 flex items-center justify-center touch-none select-none border border-slate-800" style="min-height: 360px; max-height: 66vh;">
+        <img id="cropImg" src="" alt="Crop" class="max-h-[60vh] max-w-full object-contain pointer-events-none rounded-lg block" draggable="false">
+        <div id="cropOverlayBox" class="absolute pointer-events-none" style="touch-action: none;">
+          <svg id="cropSvg" class="w-full h-full pointer-events-none">
+            <path id="cropCutoutPath" d="" fill="rgba(15, 23, 42, 0.55)" fill-rule="evenodd" />
+            <polygon id="cropPolygon" points="" fill="rgba(99, 102, 241, 0.12)" stroke="#6366f1" stroke-width="2.5"/>
+          </svg>
+          <div id="cropHandlesContainer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+          <!-- Opposite-Corner 2.5x Zoom Loupe (Never hides beneath finger!) -->
+          <div id="loupeContainer" class="hidden absolute top-0 left-0 pointer-events-none z-30 transition-transform duration-150 ease-out" style="will-change: transform;">
+            <div class="relative w-[108px] h-[108px] rounded-full overflow-hidden border-[3px] border-indigo-500 shadow-2xl bg-slate-900 ring-2 ring-white/90">
+              <canvas id="loupeCanvas" width="104" height="104" class="w-full h-full block"></canvas>
+              <span class="absolute bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950/80 text-[9px] font-bold text-white leading-none">2.5x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="w-full flex items-center justify-between pt-1">
+        <button onclick="cancelCrop()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer">रद्द करें</button>
+        <button id="btnApplyCrop" onclick="applyCrop()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md cursor-pointer">
+          ✓ क्रॉप लागू करें (Next)
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Filter & Text Enhance Selector -->
+    <div id="filterSection" class="hidden w-full flex flex-col items-center gap-4">
+      <div class="w-full flex items-center justify-between">
+        <button onclick="backToCropFromFilter()" class="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-700 cursor-pointer">← क्रॉप सुधारें</button>
+        <span id="filterBatchBadge" class="text-xs font-bold text-slate-800">टेक्स्ट एन्हांस व शार्पनेस</span>
+        <button onclick="rotateFilterImage()" class="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-700 cursor-pointer">घुमाएं 90°</button>
+      </div>
+
+      <div class="relative w-full max-h-[54vh] bg-slate-950 rounded-2xl overflow-hidden p-2.5 flex items-center justify-center border border-slate-800">
+        <canvas id="filterCanvas" class="max-h-[48vh] max-w-full object-contain rounded"></canvas>
+      </div>
+
+      <!-- Filter Presets -->
+      <div class="w-full grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <button onclick="setFilterPreset('magic_color')" id="btnFilter_magic_color" class="p-2.5 rounded-xl border-2 border-indigo-600 bg-indigo-50/80 text-left cursor-pointer">
+          <p class="text-xs font-bold text-slate-900">Magic Color</p>
+          <p class="text-[10px] text-slate-500">पूरा पेपर सफ़ेद + रंग स्पष्ट</p>
+        </button>
+        <button onclick="setFilterPreset('text_enhance')" id="btnFilter_text_enhance" class="p-2.5 rounded-xl border border-slate-200 bg-white text-left cursor-pointer">
+          <p class="text-xs font-bold text-slate-900">Text Enhance</p>
+          <p class="text-[10px] text-slate-500">सफ़ेद पेपर + गहरे अक्षर</p>
+        </button>
+        <button onclick="setFilterPreset('bw_clean')" id="btnFilter_bw_clean" class="p-2.5 rounded-xl border border-slate-200 bg-white text-left cursor-pointer">
+          <p class="text-xs font-bold text-slate-900">Document Clean B&W</p>
+          <p class="text-[10px] text-slate-500">सफ़ेद पेपर + परफ़ेक्ट B&W</p>
+        </button>
+        <button onclick="setFilterPreset('original')" id="btnFilter_original" class="p-2.5 rounded-xl border border-slate-200 bg-white text-left cursor-pointer">
+          <p class="text-xs font-bold text-slate-900">Original</p>
+          <p class="text-[10px] text-slate-500">असली कैमरा रंग</p>
+        </button>
+        <button onclick="setFilterPreset('grayscale')" id="btnFilter_grayscale" class="p-2.5 rounded-xl border border-slate-200 bg-white text-left cursor-pointer">
+          <p class="text-xs font-bold text-slate-900">Grayscale</p>
+          <p class="text-[10px] text-slate-500">मोनोक्रोम टोन</p>
+        </button>
+      </div>
+
+      <!-- Sharpness Slider -->
+      <div class="w-full bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-800">शार्पनेस (Sharpness): <span id="sharpnessVal" class="text-indigo-600">60%</span></span>
+          <button onclick="setSharpness(60)" class="text-[11px] text-slate-400 hover:text-slate-600 cursor-pointer">रीसेट</button>
+        </div>
+        <input type="range" min="0" max="200" step="5" value="60" id="sharpnessInput" oninput="onSharpnessChange(this.value)" class="w-full accent-indigo-600 cursor-pointer">
+      </div>
+
+      <div class="w-full flex items-center justify-between pt-1">
+        <button onclick="downloadFilteredJpg()" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 cursor-pointer">
+          JPG डाउनलोड
+        </button>
+        <button onclick="savePageToDocument()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md cursor-pointer">
+          पेज सेव करें ✓
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // App State
+    let pages = [];
+    let activePageIndex = 0;
+    let editingPageId = null;
+
+    // Sequential multi-image crop queue (prevents skipping crop when 2+ images are chosen)
+    let pendingCropQueue = [];
+    let pendingCropIndex = -1;
+    let pendingCroppedBatch = [];
+
+    let currentRawImage = '';
+    let currentCroppedImage = '';
+    let activeFilter = 'magic_color';
+    let currentSharpness = 60;
+
+    let mediaStream = null;
+    let currentFacingMode = 'environment';
+
+    // Crop state
+    let corners = { tl: {x:0, y:0}, tr: {x:0, y:0}, br: {x:0, y:0}, bl: {x:0, y:0} };
+    let cropImgNaturalWidth = 0;
+    let cropImgNaturalHeight = 0;
+    let cropDisplayW = 0;
+    let cropDisplayH = 0;
+    let loupeProxyCanvas = null;
+    let handleEls = {};
+    let dragState = { handle: null, startPoint: null, startCorners: null, currentPoint: null, rafId: null };
+
+    function showToast(msg) {
+      const el = document.getElementById('toastBanner');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.add('hidden'), 2600);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      startCamera();
+    });
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('cropSection').classList.contains('hidden')) {
+        syncCropOverlayDimensions();
+        updateCropDOMOverlay();
+      }
+    });
+
+    async function startCamera() {
+      const video = document.getElementById('cameraVideo');
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: currentFacingMode, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 1080 } },
+          audio: false
+        });
+        video.srcObject = mediaStream;
+      } catch (e) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: false });
+          video.srcObject = mediaStream;
+        } catch (err2) {
+          switchCaptureMode('upload');
+        }
+      }
+    }
+
+    function switchCameraFacing() {
+      currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+      startCamera();
+    }
+
+    function switchCaptureMode(mode) {
+      const cam = document.getElementById('cameraContainer');
+      const up = document.getElementById('uploadContainer');
+      const bCam = document.getElementById('btnTabCamera');
+      const bUp = document.getElementById('btnTabUpload');
+
+      if (mode === 'camera') {
+        cam.classList.remove('hidden');
+        up.classList.add('hidden');
+        bCam.className = "px-3.5 py-2 text-xs font-semibold rounded-xl bg-white text-slate-900 shadow-xs cursor-pointer";
+        bUp.className = "px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-900 cursor-pointer";
+        startCamera();
+      } else {
+        cam.classList.add('hidden');
+        up.classList.remove('hidden');
+        bUp.className = "px-3.5 py-2 text-xs font-semibold rounded-xl bg-white text-slate-900 shadow-xs cursor-pointer";
+        bCam.className = "px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-900 cursor-pointer";
+      }
+    }
+
+    function captureSnapshot() {
+      const video = document.getElementById('cameraVideo');
+      if (!video.videoWidth || !video.videoHeight) return;
+      let targetW = video.videoWidth;
+      let targetH = video.videoHeight;
+      const maxDim = 1600;
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW > targetH) { targetH = Math.round((targetH * maxDim) / targetW); targetW = maxDim; }
+        else { targetW = Math.round((targetW * maxDim) / targetH); targetH = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      canvas.getContext('2d').drawImage(video, 0, 0, targetW, targetH);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      canvas.width = 0; canvas.height = 0;
+
+      editingPageId = null;
+      pendingCropQueue = [];
+      pendingCropIndex = -1;
+      openCropView(dataUrl);
+    }
+
+    async function handleFileInput(e) {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      editingPageId = null;
+
+      const dataUrls = [];
+      for (let i = 0; i < files.length; i++) {
+        dataUrls.push(await readFileOptimized(files[i]));
+      }
+      e.target.value = '';
+
+      if (dataUrls.length === 1) {
+        pendingCropQueue = [];
+        pendingCropIndex = -1;
+        openCropView(dataUrls[0]);
+      } else {
+        // Sequential crop queue for 2+ images so Crop is never skipped
+        pendingCropQueue = dataUrls;
+        pendingCropIndex = 0;
+        pendingCroppedBatch = [];
+        openCropView(pendingCropQueue[0]);
+        showToast(`${dataUrls.length} इमेज चुनी गईं — अब क्रमशः सभी को क्रॉप करें`);
+      }
+    }
+
+    function readFileOptimized(file) {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          const maxDim = 1800;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const out = c.toDataURL('image/jpeg', 0.9);
+          c.width = 0; c.height = 0;
+          resolve(out);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          const r = new FileReader();
+          r.onload = (ev) => resolve(ev.target.result);
+          r.readAsDataURL(file);
+        };
+        img.src = url;
+      });
+    }
+
+    // ==================== CROP VIEW & 120 FPS LOUPE ====================
+    function openCropView(dataUrl, initialCorners) {
+      currentRawImage = dataUrl;
+      document.getElementById('captureSection').classList.add('hidden');
+      document.getElementById('operationalStudio').classList.add('hidden');
+      document.getElementById('filterSection').classList.add('hidden');
+      document.getElementById('cropSection').classList.remove('hidden');
+
+      const badge = document.getElementById('cropBatchBadge');
+      if (pendingCropQueue.length > 1 && pendingCropIndex >= 0) {
+        badge.textContent = `इमेज ${pendingCropIndex + 1} / ${pendingCropQueue.length} क्रॉप करें`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      const img = document.getElementById('cropImg');
+      img.onload = async () => {
+        cropImgNaturalWidth = img.naturalWidth || img.width;
+        cropImgNaturalHeight = img.naturalHeight || img.height;
+        buildLoupeProxy(img);
+        syncCropOverlayDimensions();
+
+        if (initialCorners) {
+          corners = JSON.parse(JSON.stringify(initialCorners));
+        } else {
+          corners = await autoDetectDocumentCorners(img);
+        }
+        createHandleElements();
+        updateCropDOMOverlay();
+      };
+      img.src = dataUrl;
+    }
+
+    function syncCropOverlayDimensions() {
+      const img = document.getElementById('cropImg');
+      const box = document.getElementById('cropOverlayBox');
+      cropDisplayW = img.clientWidth || 1;
+      cropDisplayH = img.clientHeight || 1;
+      box.style.width = cropDisplayW + 'px';
+      box.style.height = cropDisplayH + 'px';
+      box.style.left = img.offsetLeft + 'px';
+      box.style.top = img.offsetTop + 'px';
+    }
+
+    function buildLoupeProxy(img) {
+      const maxDim = 720;
+      const nw = img.naturalWidth || img.width;
+      const nh = img.naturalHeight || img.height;
+      const scale = Math.min(1, maxDim / Math.max(nw, nh));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(nw * scale));
+      c.height = Math.max(1, Math.round(nh * scale));
+      c.getContext('2d', { alpha: false }).drawImage(img, 0, 0, c.width, c.height);
+      loupeProxyCanvas = c;
+    }
+
+    function drawLoupeDirect(naturalPoint) {
+      const canvas = document.getElementById('loupeCanvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const size = 104, zoom = 2.5;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, size, size);
+
+      if (loupeProxyCanvas && cropImgNaturalWidth > 0) {
+        const pxScaleX = loupeProxyCanvas.width / cropImgNaturalWidth;
+        const pxScaleY = loupeProxyCanvas.height / cropImgNaturalHeight;
+        const srcW = size / zoom, srcH = size / zoom;
+        const srcX = Math.max(0, Math.min(cropImgNaturalWidth - srcW, naturalPoint.x - srcW / 2));
+        const srcY = Math.max(0, Math.min(cropImgNaturalHeight - srcH, naturalPoint.y - srcH / 2));
+        ctx.drawImage(loupeProxyCanvas, srcX * pxScaleX, srcY * pxScaleY, srcW * pxScaleX, srcH * pxScaleY, 0, 0, size, size);
+      }
+
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(size / 2, 4); ctx.lineTo(size / 2, size / 2 - 9);
+      ctx.moveTo(size / 2, size / 2 + 9); ctx.lineTo(size / 2, size - 4);
+      ctx.moveTo(4, size / 2); ctx.lineTo(size / 2 - 9, size / 2);
+      ctx.moveTo(size / 2 + 9, size / 2); ctx.lineTo(size - 4, size / 2);
+      ctx.stroke();
+    }
+
+    function createHandleElements() {
+      const container = document.getElementById('cropHandlesContainer');
+      container.innerHTML = '';
+      handleEls = {};
+      ['tl', 'tr', 'br', 'bl', 'top', 'right', 'bottom', 'left'].forEach((key) => {
+        const isCorner = ['tl', 'tr', 'br', 'bl'].includes(key);
+        const isVert = key === 'right' || key === 'left';
+        const el = document.createElement('div');
+        el.className = isCorner
+          ? 'absolute top-0 left-0 w-12 h-12 flex items-center justify-center pointer-events-auto touch-none cursor-move z-20'
+          : `absolute top-0 left-0 ${isVert ? 'w-6 h-10' : 'w-10 h-6'} flex items-center justify-center pointer-events-auto touch-none cursor-move z-10`;
+        el.style.willChange = 'transform';
+        el.innerHTML = isCorner
+          ? '<div class="w-6 h-6 rounded-full bg-white border-2 border-indigo-600 shadow-lg flex items-center justify-center pointer-events-none"><div class="w-2 h-2 rounded-full bg-indigo-600"></div></div>'
+          : `<div class="bg-white/90 border border-indigo-500 shadow-sm rounded-full pointer-events-none ${isVert ? 'w-2 h-5' : 'w-5 h-2'}"></div>`;
+        el.addEventListener('pointerdown', (e) => onHandlePointerDown(e, key));
+        container.appendChild(el);
+        handleEls[key] = el;
+      });
+    }
+
+    function updateCropDOMOverlay(focusPoint) {
+      if (!cropImgNaturalWidth || !cropDisplayW) return;
+      const sc = cropDisplayW / cropImgNaturalWidth;
+      const dTl = { x: corners.tl.x * sc, y: corners.tl.y * sc };
+      const dTr = { x: corners.tr.x * sc, y: corners.tr.y * sc };
+      const dBr = { x: corners.br.x * sc, y: corners.br.y * sc };
+      const dBl = { x: corners.bl.x * sc, y: corners.bl.y * sc };
+
+      const dTop = { x: (dTl.x + dTr.x) / 2, y: (dTl.y + dTr.y) / 2 };
+      const dRight = { x: (dTr.x + dBr.x) / 2, y: (dTr.y + dBr.y) / 2 };
+      const dBottom = { x: (dBl.x + dBr.x) / 2, y: (dBl.y + dBr.y) / 2 };
+      const dLeft = { x: (dTl.x + dBl.x) / 2, y: (dTl.y + dBl.y) / 2 };
+
+      document.getElementById('cropPolygon').setAttribute('points', `${dTl.x},${dTl.y} ${dTr.x},${dTr.y} ${dBr.x},${dBr.y} ${dBl.x},${dBl.y}`);
+      document.getElementById('cropCutoutPath').setAttribute('d', `M 0 0 H ${cropDisplayW} V ${cropDisplayH} H 0 Z M ${dTl.x} ${dTl.y} L ${dTr.x} ${dTr.y} L ${dBr.x} ${dBr.y} L ${dBl.x} ${dBl.y} Z`);
+
+      if (handleEls.tl) handleEls.tl.style.transform = `translate3d(${dTl.x - 24}px, ${dTl.y - 24}px, 0)`;
+      if (handleEls.tr) handleEls.tr.style.transform = `translate3d(${dTr.x - 24}px, ${dTr.y - 24}px, 0)`;
+      if (handleEls.br) handleEls.br.style.transform = `translate3d(${dBr.x - 24}px, ${dBr.y - 24}px, 0)`;
+      if (handleEls.bl) handleEls.bl.style.transform = `translate3d(${dBl.x - 24}px, ${dBl.y - 24}px, 0)`;
+      if (handleEls.top) handleEls.top.style.transform = `translate3d(${dTop.x - 20}px, ${dTop.y - 12}px, 0)`;
+      if (handleEls.right) handleEls.right.style.transform = `translate3d(${dRight.x - 12}px, ${dRight.y - 20}px, 0)`;
+      if (handleEls.bottom) handleEls.bottom.style.transform = `translate3d(${dBottom.x - 20}px, ${dBottom.y - 12}px, 0)`;
+      if (handleEls.left) handleEls.left.style.transform = `translate3d(${dLeft.x - 12}px, ${dLeft.y - 20}px, 0)`;
+
+      const loupeBox = document.getElementById('loupeContainer');
+      if (focusPoint) {
+        const dispP = { x: focusPoint.x * sc, y: focusPoint.y * sc };
+        const loupeSize = 108, margin = 10;
+        const loupeX = dispP.x < cropDisplayW * 0.5 ? Math.max(margin, cropDisplayW - loupeSize - margin) : margin;
+        let loupeY = margin;
+        if (dispP.y < loupeSize + 44 && Math.abs((loupeX + loupeSize / 2) - dispP.x) < loupeSize * 0.85) {
+          loupeY = Math.max(margin, cropDisplayH - loupeSize - margin);
+        }
+        loupeBox.style.transform = `translate3d(${loupeX}px, ${loupeY}px, 0)`;
+        loupeBox.classList.remove('hidden');
+        drawLoupeDirect(focusPoint);
+      }
+    }
+
+    function onHandlePointerDown(e, handleKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const img = document.getElementById('cropImg');
+      const rect = img.getBoundingClientRect();
+      const sc = cropDisplayW / cropImgNaturalWidth;
+      const naturalP = {
+        x: Math.max(0, Math.min(cropDisplayW, e.clientX - rect.left)) / sc,
+        y: Math.max(0, Math.min(cropDisplayH, e.clientY - rect.top)) / sc,
+      };
+      dragState = {
+        handle: handleKey,
+        startPoint: naturalP,
+        startCorners: JSON.parse(JSON.stringify(corners)),
+        currentPoint: naturalP,
+        rafId: null,
+      };
+      window.addEventListener('pointermove', onWindowCropMove, { passive: false });
+      window.addEventListener('pointerup', onWindowCropUp);
+      window.addEventListener('pointercancel', onWindowCropUp);
+      updateCropDOMOverlay(naturalP);
+    }
+
+    function onWindowCropMove(e) {
+      if (!dragState.handle) return;
+      e.preventDefault();
+      const img = document.getElementById('cropImg');
+      const rect = img.getBoundingClientRect();
+      const sc = cropDisplayW / cropImgNaturalWidth;
+      dragState.currentPoint = {
+        x: Math.max(0, Math.min(cropDisplayW, e.clientX - rect.left)) / sc,
+        y: Math.max(0, Math.min(cropDisplayH, e.clientY - rect.top)) / sc,
+      };
+
+      if (dragState.rafId === null) {
+        dragState.rafId = requestAnimationFrame(() => {
+          dragState.rafId = null;
+          const { handle, startPoint, startCorners, currentPoint } = dragState;
+          if (!handle) return;
+          const dx = currentPoint.x - startPoint.x;
+          const dy = currentPoint.y - startPoint.y;
+          const clampX = (v) => Math.max(0, Math.min(cropImgNaturalWidth, v));
+          const clampY = (v) => Math.max(0, Math.min(cropImgNaturalHeight, v));
+
+          let focusP;
+          if (handle === 'tl') { corners.tl = { x: clampX(startCorners.tl.x + dx), y: clampY(startCorners.tl.y + dy) }; focusP = corners.tl; }
+          else if (handle === 'tr') { corners.tr = { x: clampX(startCorners.tr.x + dx), y: clampY(startCorners.tr.y + dy) }; focusP = corners.tr; }
+          else if (handle === 'br') { corners.br = { x: clampX(startCorners.br.x + dx), y: clampY(startCorners.br.y + dy) }; focusP = corners.br; }
+          else if (handle === 'bl') { corners.bl = { x: clampX(startCorners.bl.x + dx), y: clampY(startCorners.bl.y + dy) }; focusP = corners.bl; }
+          else if (handle === 'top') {
+            corners.tl = { x: clampX(startCorners.tl.x + dx), y: clampY(startCorners.tl.y + dy) };
+            corners.tr = { x: clampX(startCorners.tr.x + dx), y: clampY(startCorners.tr.y + dy) };
+            focusP = { x: (corners.tl.x + corners.tr.x) / 2, y: (corners.tl.y + corners.tr.y) / 2 };
+          } else if (handle === 'right') {
+            corners.tr = { x: clampX(startCorners.tr.x + dx), y: clampY(startCorners.tr.y + dy) };
+            corners.br = { x: clampX(startCorners.br.x + dx), y: clampY(startCorners.br.y + dy) };
+            focusP = { x: (corners.tr.x + corners.br.x) / 2, y: (corners.tr.y + corners.br.y) / 2 };
+          } else if (handle === 'bottom') {
+            corners.bl = { x: clampX(startCorners.bl.x + dx), y: clampY(startCorners.bl.y + dy) };
+            corners.br = { x: clampX(startCorners.br.x + dx), y: clampY(startCorners.br.y + dy) };
+            focusP = { x: (corners.bl.x + corners.br.x) / 2, y: (corners.bl.y + corners.br.y) / 2 };
+          } else {
+            corners.tl = { x: clampX(startCorners.tl.x + dx), y: clampY(startCorners.tl.y + dy) };
+            corners.bl = { x: clampX(startCorners.bl.x + dx), y: clampY(startCorners.bl.y + dy) };
+            focusP = { x: (corners.tl.x + corners.bl.x) / 2, y: (corners.tl.y + corners.bl.y) / 2 };
+          }
+          updateCropDOMOverlay(focusP);
+        });
+      }
+    }
+
+    function onWindowCropUp() {
+      if (dragState.rafId !== null) cancelAnimationFrame(dragState.rafId);
+      dragState.handle = null;
+      dragState.rafId = null;
+      window.removeEventListener('pointermove', onWindowCropMove);
+      window.removeEventListener('pointerup', onWindowCropUp);
+      window.removeEventListener('pointercancel', onWindowCropUp);
+      document.getElementById('loupeContainer').classList.add('hidden');
+    }
+
+    async function runAutoDetectOnCrop() {
+      const img = document.getElementById('cropImg');
+      corners = await autoDetectDocumentCorners(img);
+      updateCropDOMOverlay();
+      showToast('दस्तावेज़ किनारे स्वतः पहचाने गए');
+    }
+
+    function autoFitCrop() {
+      corners = {
+        tl: { x: 0, y: 0 },
+        tr: { x: cropImgNaturalWidth, y: 0 },
+        br: { x: cropImgNaturalWidth, y: cropImgNaturalHeight },
+        bl: { x: 0, y: cropImgNaturalHeight }
+      };
+      updateCropDOMOverlay();
+    }
+
+    async function autoCropAndProceed() {
+      const img = document.getElementById('cropImg');
+      corners = await autoDetectDocumentCorners(img);
+      updateCropDOMOverlay();
+      await applyCrop();
+    }
+
+    function rotateCropImage() {
+      rotateDataUrl(currentRawImage, 90).then(rotated => openCropView(rotated));
+    }
+
+    function cancelCrop() {
+      pendingCropQueue = [];
+      pendingCropIndex = -1;
+      pendingCroppedBatch = [];
+      if (pages.length > 0) {
+        showOperationalStudio();
+      } else {
+        document.getElementById('cropSection').classList.add('hidden');
+        document.getElementById('captureSection').classList.remove('hidden');
+      }
+    }
+
+    // ==================== AUTO DETECT DOCUMENT CORNERS (RANSAC + CENTER BFS) ====================
+    function fitLineRansac(points, tol = 3.2) {
+      if (points.length < 4) return null;
+      let bestInliers = -1, bestLine = null;
+      const step = Math.max(1, Math.floor(points.length / 22));
+      for (let i = 0; i < points.length; i += step) {
+        for (let j = i + step; j < points.length; j += step) {
+          const p1 = points[i], p2 = points[j];
+          const dx = p2.x - p1.x, dy = p2.y - p1.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 10) continue;
+          const a = -dy / dist, b = dx / dist, c = -(a * p1.x + b * p1.y);
+          let inliers = 0;
+          for (let k = 0; k < points.length; k++) {
+            if (Math.abs(a * points[k].x + b * points[k].y + c) <= tol) inliers++;
+          }
+          if (inliers > bestInliers) { bestInliers = inliers; bestLine = { a, b, c }; }
+        }
+      }
+      if (!bestLine || bestInliers < 4) return null;
+      const inlierPts = points.filter(p => Math.abs(bestLine.a * p.x + bestLine.b * p.y + bestLine.c) <= tol);
+      if (inlierPts.length >= 4) {
+        let mx = 0, my = 0;
+        for (const p of inlierPts) { mx += p.x; my += p.y; }
+        mx /= inlierPts.length; my /= inlierPts.length;
+        let sxx = 0, syy = 0, sxy = 0;
+        for (const p of inlierPts) {
+          const dx = p.x - mx, dy = p.y - my;
+          sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+        }
+        const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+        const a = -Math.sin(theta), b = Math.cos(theta);
+        return { a, b, c: -(a * mx + b * my) };
+      }
+      return bestLine;
+    }
+
+    function intersectLines(l1, l2) {
+      const det = l1.a * l2.b - l2.a * l1.b;
+      if (Math.abs(det) < 1e-5) return null;
+      return { x: (l1.b * l2.c - l2.b * l1.c) / det, y: (l2.a * l1.c - l1.a * l2.c) / det };
+    }
+
+    async function autoDetectDocumentCorners(img) {
+      const nw = img.naturalWidth || img.width;
+      const nh = img.naturalHeight || img.height;
+      const defaultInset = {
+        tl: { x: Math.round(nw * 0.05), y: Math.round(nh * 0.05) },
+        tr: { x: Math.round(nw * 0.95), y: Math.round(nh * 0.05) },
+        br: { x: Math.round(nw * 0.95), y: Math.round(nh * 0.95) },
+        bl: { x: Math.round(nw * 0.05), y: Math.round(nh * 0.95) },
+      };
+      if (nw < 60 || nh < 60) return defaultInset;
+
+      try {
+        const anW = 240;
+        const anH = Math.max(60, Math.round((nh * anW) / nw));
+        const total = anW * anH;
+        const c = document.createElement('canvas');
+        c.width = anW; c.height = anH;
+        const ctx = c.getContext('2d', { willReadFrequently: true, alpha: false });
+        ctx.drawImage(img, 0, 0, anW, anH);
+        const data = ctx.getImageData(0, 0, anW, anH).data;
+        c.width = 0; c.height = 0;
+
+        const gray = new Uint8Array(total);
+        const paperScore = new Uint8Array(total);
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const lum = (r * 77 + g * 150 + b * 29) >> 8;
+          const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+          gray[j] = lum;
+          paperScore[j] = Math.max(0, lum - Math.round(chroma * 0.35));
+        }
+
+        const blurred = new Uint8Array(total);
+        for (let y = 1; y < anH - 1; y++) {
+          const yp = (y - 1) * anW, yc = y * anW, yn = (y + 1) * anW;
+          for (let x = 1; x < anW - 1; x++) {
+            blurred[yc + x] = (gray[yp + x - 1] + 2 * gray[yp + x] + gray[yp + x + 1] + 2 * gray[yc + x - 1] + 4 * gray[yc + x] + 2 * gray[yc + x + 1] + gray[yn + x - 1] + 2 * gray[yn + x] + gray[yn + x + 1]) >> 4;
+          }
+        }
+
+        const edgeMag = new Uint8Array(total);
+        for (let y = 1; y < anH - 1; y++) {
+          const yp = (y - 1) * anW, yc = y * anW, yn = (y + 1) * anW;
+          for (let x = 1; x < anW - 1; x++) {
+            const gx = -blurred[yp + x - 1] + blurred[yp + x + 1] - 2 * blurred[yc + x - 1] + 2 * blurred[yc + x + 1] - blurred[yn + x - 1] + blurred[yn + x + 1];
+            const gy = -blurred[yp + x - 1] - 2 * blurred[yp + x] - blurred[yp + x + 1] + blurred[yn + x - 1] + 2 * blurred[yn + x] + blurred[yn + x + 1];
+            edgeMag[yc + x] = Math.min(255, (Math.abs(gx) + Math.abs(gy)) >> 2);
+          }
+        }
+
+        const dilated = new Uint8Array(total);
+        for (let y = 0; y < anH; y++) {
+          const y0 = Math.max(0, y - 2), y1 = Math.min(anH - 1, y + 2);
+          for (let x = 0; x < anW; x++) {
+            const x0 = Math.max(0, x - 2), x1 = Math.min(anW - 1, x + 2);
+            let mx = 0;
+            for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) if (paperScore[yy * anW + xx] > mx) mx = paperScore[yy * anW + xx];
+            dilated[y * anW + x] = mx;
+          }
+        }
+        const closed = new Uint8Array(total);
+        for (let y = 0; y < anH; y++) {
+          const y0 = Math.max(0, y - 2), y1 = Math.min(anH - 1, y + 2);
+          for (let x = 0; x < anW; x++) {
+            const x0 = Math.max(0, x - 2), x1 = Math.min(anW - 1, x + 2);
+            let mn = 255;
+            for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) if (dilated[yy * anW + xx] < mn) mn = dilated[yy * anW + xx];
+            closed[y * anW + x] = mn;
+          }
+        }
+
+        const centerVals = [], borderVals = [];
+        for (let y = Math.floor(anH * 0.32); y < Math.floor(anH * 0.68); y += 2)
+          for (let x = Math.floor(anW * 0.32); x < Math.floor(anW * 0.68); x += 2) centerVals.push(closed[y * anW + x]);
+        centerVals.sort((a, b) => a - b);
+        const corePaperVal = centerVals[Math.floor(centerVals.length * 0.65)] || 180;
+
+        for (let x = 0; x < anW; x += 2) borderVals.push(closed[x], closed[(anH - 1) * anW + x]);
+        for (let y = 0; y < anH; y += 2) borderVals.push(closed[y * anW], closed[y * anW + anW - 1]);
+        borderVals.sort((a, b) => a - b);
+        const borderMedian = borderVals[Math.floor(borderVals.length * 0.5)] || 60;
+
+        const runSeeded = (thresh, barrier) => {
+          const visited = new Uint8Array(total);
+          let bestMask = new Uint8Array(total), bestCount = 0, bestTouches = total;
+          const q = new Int32Array(total);
+          for (let syF = 0.35; syF <= 0.65; syF += 0.075) {
+            for (let sxF = 0.35; sxF <= 0.65; sxF += 0.075) {
+              const seed = Math.floor(anH * syF) * anW + Math.floor(anW * sxF);
+              if (visited[seed] || closed[seed] < thresh) continue;
+              const comp = new Uint8Array(total);
+              let head = 0, tail = 0, touches = 0;
+              q[tail++] = seed; visited[seed] = 1; comp[seed] = 1;
+              while (head < tail) {
+                const curr = q[head++];
+                const cx = curr % anW, cy = (curr - cx) / anW;
+                if (cx <= 1 || cx >= anW - 2 || cy <= 1 || cy >= anH - 2) touches++;
+                const nbs = [cx > 0 ? curr - 1 : -1, cx < anW - 1 ? curr + 1 : -1, cy > 0 ? curr - anW : -1, cy < anH - 1 ? curr + anW : -1];
+                for (let n = 0; n < 4; n++) {
+                  const ni = nbs[n];
+                  if (ni >= 0 && !visited[ni] && closed[ni] >= thresh && !(edgeMag[ni] > barrier && closed[ni] < corePaperVal - 18)) {
+                    visited[ni] = 1; comp[ni] = 1; q[tail++] = ni;
+                  }
+                }
+              }
+              if (tail > bestCount && touches / (2 * (anW + anH)) < 0.55) {
+                bestCount = tail; bestMask = comp; bestTouches = touches;
+              }
+            }
+          }
+          return { mask: bestMask, count: bestCount, borderTouches: bestTouches };
+        };
+
+        const baseThresh = corePaperVal > borderMedian + 18 ? Math.round(borderMedian + (corePaperVal - borderMedian) * 0.45) : Math.max(85, corePaperVal - 40);
+        let region = runSeeded(baseThresh, 44);
+        if (region.count / total > 0.85 || region.borderTouches > (anW + anH) * 0.6) {
+          const stricter = runSeeded(Math.min(corePaperVal - 15, baseThresh + 20), 28);
+          if (stricter.count / total >= 0.14) region = stricter;
+        }
+
+        if (region.count / total >= 0.14 && region.count / total <= 0.94) {
+          const comp = region.mask;
+          let minX = anW, maxX = 0, minY = anH, maxY = 0;
+          for (let y = 0; y < anH; y++) for (let x = 0; x < anW; x++) if (comp[y * anW + x]) {
+            if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+          }
+          const compW = maxX - minX, compH = maxY - minY;
+          if (compW > anW * 0.25 && compH > anH * 0.25) {
+            const topPts = [], botPts = [], leftPts = [], rightPts = [];
+            const xm = Math.max(4, Math.round(compW * 0.08)), ym = Math.max(4, Math.round(compH * 0.08));
+            for (let x = minX + xm; x <= maxX - xm; x += 2) {
+              for (let y = minY; y <= maxY; y++) if (comp[y * anW + x]) { topPts.push({ x, y }); break; }
+              for (let y = maxY; y >= minY; y--) if (comp[y * anW + x]) { botPts.push({ x, y }); break; }
+            }
+            for (let y = minY + ym; y <= maxY - ym; y += 2) {
+              for (let x = minX; x <= maxX; x++) if (comp[y * anW + x]) { leftPts.push({ x, y }); break; }
+              for (let x = maxX; x >= minX; x--) if (comp[y * anW + x]) { rightPts.push({ x, y }); break; }
+            }
+            const tL = fitLineRansac(topPts, 3.2), bL = fitLineRansac(botPts, 3.2), lL = fitLineRansac(leftPts, 3.2), rL = fitLineRansac(rightPts, 3.2);
+            if (tL && bL && lL && rL) {
+              const pTL = intersectLines(tL, lL), pTR = intersectLines(tL, rL), pBR = intersectLines(bL, rL), pBL = intersectLines(bL, lL);
+              if (pTL && pTR && pBR && pBL) {
+                const sx = nw / anW, sy = nh / anH;
+                const cW = v => Math.round(Math.max(0, Math.min(nw, v)));
+                const cH = v => Math.round(Math.max(0, Math.min(nh, v)));
+                const qd = { tl: { x: cW(pTL.x * sx), y: cH(pTL.y * sy) }, tr: { x: cW(pTR.x * sx), y: cH(pTR.y * sy) }, br: { x: cW(pBR.x * sx), y: cH(pBR.y * sy) }, bl: { x: cW(pBL.x * sx), y: cH(pBL.y * sy) } };
+                if (qd.tr.x - qd.tl.x > nw * 0.25 && qd.br.x - qd.bl.x > nw * 0.25 && qd.bl.y - qd.tl.y > nh * 0.25 && qd.br.y - qd.tr.y > nh * 0.25) return qd;
+              }
+            }
+          }
+        }
+      } catch (err) { console.warn('Auto detect fallback', err); }
+      return defaultInset;
+    }
+
+    // ==================== PROJECTIVE PERSPECTIVE WARP ====================
+    async function perspectiveWarp(imgSrc, q) {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = imgSrc; });
+      const wTop = Math.hypot(q.tr.x - q.tl.x, q.tr.y - q.tl.y);
+      const wBot = Math.hypot(q.br.x - q.bl.x, q.br.y - q.bl.y);
+      const hLeft = Math.hypot(q.bl.x - q.tl.x, q.bl.y - q.tl.y);
+      const hRight = Math.hypot(q.br.x - q.tr.x, q.br.y - q.tr.y);
+      let dstW = Math.max(100, Math.round(Math.max(wTop, wBot)));
+      let dstH = Math.max(100, Math.round(Math.max(hLeft, hRight)));
+      const MAX_DIM = 1600;
+      if (dstW > MAX_DIM || dstH > MAX_DIM) {
+        if (dstW > dstH) { dstH = Math.round((dstH * MAX_DIM) / dstW); dstW = MAX_DIM; }
+        else { dstW = Math.round((dstW * MAX_DIM) / dstH); dstH = MAX_DIM; }
+      }
+
+      let srcW = img.naturalWidth || img.width, srcH = img.naturalHeight || img.height, srcScale = 1;
+      if (srcW > MAX_DIM || srcH > MAX_DIM) {
+        if (srcW > srcH) { srcScale = MAX_DIM / srcW; srcH = Math.round(srcH * srcScale); srcW = MAX_DIM; }
+        else { srcScale = MAX_DIM / srcH; srcW = Math.round(srcW * srcScale); srcH = MAX_DIM; }
+      }
+
+      const sC = document.createElement('canvas'); sC.width = srcW; sC.height = srcH;
+      const sCtx = sC.getContext('2d', { willReadFrequently: true });
+      sCtx.drawImage(img, 0, 0, srcW, srcH);
+      const srcPix = sCtx.getImageData(0, 0, srcW, srcH).data;
+
+      const dC = document.createElement('canvas'); dC.width = dstW; dC.height = dstH;
+      const dCtx = dC.getContext('2d');
+      const dImg = dCtx.createImageData(dstW, dstH);
+      const dPix = dImg.data;
+
+      const x0 = q.tl.x * srcScale, y0 = q.tl.y * srcScale;
+      const x1 = q.tr.x * srcScale, y1 = q.tr.y * srcScale;
+      const x2 = q.br.x * srcScale, y2 = q.br.y * srcScale;
+      const x3 = q.bl.x * srcScale, y3 = q.bl.y * srcScale;
+      const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+      const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+      let a, b, c, d, e, f, g, h;
+      const det = dx1 * dy2 - dy1 * dx2;
+      if ((Math.abs(sx) < 1e-5 && Math.abs(sy) < 1e-5) || Math.abs(det) < 1e-6) {
+        a = x1 - x0; b = x3 - x0; c = x0; d = y1 - y0; e = y3 - y0; f = y0; g = 0; h = 0;
+      } else {
+        g = (sx * dy2 - sy * dx2) / det; h = (dx1 * sy - dy1 * sx) / det;
+        a = x1 - x0 + g * x1; b = x3 - x0 + h * x3; c = x0;
+        d = y1 - y0 + g * y1; e = y3 - y0 + h * y3; f = y0;
+      }
+      const aN = a / dstW, bN = b / dstH, dN = d / dstW, eN = e / dstH, gN = g / dstW, hN = h / dstH;
+      const maxX = srcW - 1, maxY = srcH - 1;
+      let dstIdx = 0;
+      for (let v = 0; v < dstH; v++) {
+        const rX = bN * v + c, rY = eN * v + f, rD = hN * v + 1;
+        for (let u = 0; u < dstW; u++) {
+          const inv = 1 / (gN * u + rD);
+          let sxP = Math.max(0, Math.min(maxX, (aN * u + rX) * inv));
+          let syP = Math.max(0, Math.min(maxY, (dN * u + rY) * inv));
+          const ix0 = Math.floor(sxP), iy0 = Math.floor(syP);
+          const ix1 = ix0 < maxX ? ix0 + 1 : ix0, iy1 = iy0 < maxY ? iy0 + 1 : iy0;
+          const fx = sxP - ix0, fy = syP - iy0;
+          const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+          const i00 = (iy0 * srcW + ix0) * 4, i10 = (iy0 * srcW + ix1) * 4, i01 = (iy1 * srcW + ix0) * 4, i11 = (iy1 * srcW + ix1) * 4;
+          dPix[dstIdx] = Math.round(w00 * srcPix[i00] + w10 * srcPix[i10] + w01 * srcPix[i01] + w11 * srcPix[i11]);
+          dPix[dstIdx + 1] = Math.round(w00 * srcPix[i00 + 1] + w10 * srcPix[i10 + 1] + w01 * srcPix[i01 + 1] + w11 * srcPix[i11 + 1]);
+          dPix[dstIdx + 2] = Math.round(w00 * srcPix[i00 + 2] + w10 * srcPix[i10 + 2] + w01 * srcPix[i01 + 2] + w11 * srcPix[i11 + 2]);
+          dPix[dstIdx + 3] = 255;
+          dstIdx += 4;
+        }
+      }
+      dCtx.putImageData(dImg, 0, 0);
+      const out = dC.toDataURL('image/jpeg', 0.92);
+      sC.width = 0; sC.height = 0; dC.width = 0; dC.height = 0;
+      return out;
+    }
+
+    async function applyCrop() {
+      const warpedUrl = await perspectiveWarp(currentRawImage, corners);
+      if (pendingCropQueue.length > 0 && pendingCropIndex >= 0) {
+        pendingCroppedBatch.push({
+          raw: currentRawImage,
+          cropped: warpedUrl,
+          corners: JSON.parse(JSON.stringify(corners))
+        });
+        if (pendingCropIndex + 1 < pendingCropQueue.length) {
+          pendingCropIndex++;
+          openCropView(pendingCropQueue[pendingCropIndex]);
+          return;
+        }
+        // Finished cropping all images in queue -> open Filter for all cropped batch items
+        currentRawImage = pendingCroppedBatch[0].raw;
+        currentCroppedImage = pendingCroppedBatch[0].cropped;
+        openFilterView();
+        return;
+      }
+      currentCroppedImage = warpedUrl;
+      openFilterView();
+    }
+
+    // ==================== UPGRADED IMAGE FILTERS (1:1 SYNCED WITH MAIN STUDIO) ====================
+    function computeLocalPaperBackground(data, width, height) {
+      const maxSmall = 180;
+      const scale = Math.min(1, maxSmall / Math.max(width, height));
+      const sw = Math.max(16, Math.round(width * scale)), sh = Math.max(16, Math.round(height * scale));
+      const sLen = sw * sh;
+      const sR = new Uint8Array(sLen), sG = new Uint8Array(sLen), sB = new Uint8Array(sLen);
+      const stepX = width / sw, stepY = height / sh;
+
+      for (let sy = 0; sy < sh; sy++) {
+        const y0 = Math.floor(sy * stepY), y1 = Math.min(height - 1, Math.floor((sy + 1) * stepY) - 1), ym = Math.min(height - 1, Math.floor((y0 + y1) * 0.5));
+        for (let sx = 0; sx < sw; sx++) {
+          const x0 = Math.floor(sx * stepX), x1 = Math.min(width - 1, Math.floor((sx + 1) * stepX) - 1), xm = Math.min(width - 1, Math.floor((x0 + x1) * 0.5));
+          const coords = [(y0 * width + x0) * 4, (y0 * width + x1) * 4, (y1 * width + x0) * 4, (y1 * width + x1) * 4, (ym * width + xm) * 4];
+          let bestIdx = coords[0], bestLum = -1;
+          for (let c = 0; c < coords.length; c++) {
+            const idx = coords[c], lum = data[idx] + data[idx + 1] + data[idx + 2];
+            if (lum > bestLum) { bestLum = lum; bestIdx = idx; }
+          }
+          const si = sy * sw + sx;
+          sR[si] = data[bestIdx]; sG[si] = data[bestIdx + 1]; sB[si] = data[bestIdx + 2];
+        }
+      }
+
+      const radius = Math.max(8, Math.min(20, Math.round(Math.min(sw, sh) * 0.085)));
+      const hR = new Uint8Array(sLen), hG = new Uint8Array(sLen), hB = new Uint8Array(sLen);
+      for (let y = 0; y < sh; y++) {
+        const row = y * sw;
+        for (let x = 0; x < sw; x++) {
+          let mR = 0, mG = 0, mB = 0;
+          for (let k = Math.max(0, x - radius); k <= Math.min(sw - 1, x + radius); k++) {
+            const idx = row + k;
+            if (sR[idx] > mR) mR = sR[idx]; if (sG[idx] > mG) mG = sG[idx]; if (sB[idx] > mB) mB = sB[idx];
+          }
+          hR[row + x] = mR; hG[row + x] = mG; hB[row + x] = mB;
+        }
+      }
+
+      const maxR = new Uint8Array(sLen), maxG = new Uint8Array(sLen), maxB = new Uint8Array(sLen);
+      for (let y = 0; y < sh; y++) {
+        const y0 = Math.max(0, y - radius), y1 = Math.min(sh - 1, y + radius);
+        for (let x = 0; x < sw; x++) {
+          let mR = 0, mG = 0, mB = 0;
+          for (let k = y0; k <= y1; k++) {
+            const idx = k * sw + x;
+            if (hR[idx] > mR) mR = hR[idx]; if (hG[idx] > mG) mG = hG[idx]; if (hB[idx] > mB) mB = hB[idx];
+          }
+          maxR[y * sw + x] = mR; maxG[y * sw + x] = mG; maxB[y * sw + x] = mB;
+        }
+      }
+
+      const blurR = 4;
+      const tR = new Uint8Array(sLen), tG = new Uint8Array(sLen), tB = new Uint8Array(sLen);
+      for (let y = 0; y < sh; y++) {
+        const row = y * sw;
+        for (let x = 0; x < sw; x++) {
+          const x0 = Math.max(0, x - blurR), x1 = Math.min(sw - 1, x + blurR), cnt = x1 - x0 + 1;
+          let sr = 0, sg = 0, sb = 0;
+          for (let k = x0; k <= x1; k++) { sr += maxR[row + k]; sg += maxG[row + k]; sb += maxB[row + k]; }
+          tR[row + x] = Math.round(sr / cnt); tG[row + x] = Math.round(sg / cnt); tB[row + x] = Math.round(sb / cnt);
+        }
+      }
+
+      const bgR = new Uint8Array(sLen), bgG = new Uint8Array(sLen), bgB = new Uint8Array(sLen), lums = [];
+      for (let y = 0; y < sh; y++) {
+        const y0 = Math.max(0, y - blurR), y1 = Math.min(sh - 1, y + blurR), cnt = y1 - y0 + 1;
+        for (let x = 0; x < sw; x++) {
+          let sr = 0, sg = 0, sb = 0;
+          for (let k = y0; k <= y1; k++) { const idx = k * sw + x; sr += tR[idx]; sg += tG[idx]; sb += tB[idx]; }
+          const rV = Math.round(sr / cnt), gV = Math.round(sg / cnt), bV = Math.round(sb / cnt);
+          const o = y * sw + x;
+          bgR[o] = rV; bgG[o] = gV; bgB[o] = bV;
+          lums.push(0.299 * rV + 0.587 * gV + 0.114 * bV);
+        }
+      }
+      lums.sort((a, b) => a - b);
+      return { bgR, bgG, bgB, sw, sh, medianPaperLum: lums[Math.floor(lums.length * 0.5)] || 180 };
+    }
+
+    function computeLocalMeanLuminance(lumArr, width, height, r = 3) {
+      const len = width * height, tmp = new Float32Array(len), out = new Float32Array(len);
+      for (let y = 0; y < height; y++) {
+        const row = y * width;
+        let sum = 0;
+        for (let x = 0; x <= Math.min(width - 1, r); x++) sum += lumArr[row + x];
+        for (let x = 0; x < width; x++) {
+          const left = x - r - 1, right = x + r;
+          if (left >= 0 && x > 0) sum -= lumArr[row + left];
+          if (right < width && x > 0) sum += lumArr[row + right];
+          tmp[row + x] = sum / (Math.min(width - 1, right) - Math.max(0, x - r) + 1);
+        }
+      }
+      for (let x = 0; x < width; x++) {
+        let sum = 0;
+        for (let y = 0; y <= Math.min(height - 1, r); y++) sum += tmp[y * width + x];
+        for (let y = 0; y < height; y++) {
+          const top = y - r - 1, bot = y + r;
+          if (top >= 0 && y > 0) sum -= tmp[top * width + x];
+          if (bot < height && y > 0) sum += tmp[bot * width + x];
+          out[y * width + x] = sum / (Math.min(height - 1, bot) - Math.max(0, y - r) + 1);
+        }
+      }
+      return out;
+    }
+
+    function applyConvolutionSharpness(data, width, height, sharpness) {
+      if (sharpness <= 0 || width < 3 || height < 3) return;
+      const k = (sharpness / 100) * 0.45, cw = 1 + 4 * k, copy = new Uint8ClampedArray(data), rb = width * 4;
+      for (let y = 1; y < height - 1; y++) {
+        const ro = y * rb, to = (y - 1) * rb, bo = (y + 1) * rb;
+        for (let x = 1; x < width - 1; x++) {
+          const idx = ro + x * 4, top = to + x * 4, bot = bo + x * 4, left = idx - 4, right = idx + 4;
+          for (let c = 0; c < 3; c++) {
+            const v = cw * copy[idx + c] - k * (copy[top + c] + copy[bot + c] + copy[left + c] + copy[right + c]);
+            data[idx + c] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+          }
+        }
+      }
+    }
+
+    function processImageDataFilter(data, w, h, filterType, sharpness) {
+      const pixelCount = w * h;
+      if (filterType === 'original') {
+        if (sharpness > 0) applyConvolutionSharpness(data, w, h, sharpness);
+        return;
+      }
+      if (filterType === 'grayscale') {
+        for (let i = 0; i < data.length; i += 4) {
+          const g = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+          data[i] = data[i + 1] = data[i + 2] = g;
+        }
+        if (sharpness > 0) applyConvolutionSharpness(data, w, h, sharpness);
+        return;
+      }
+
+      const { bgR, bgG, bgB, sw, sh, medianPaperLum } = computeLocalPaperBackground(data, w, h);
+      const minSafeBg = Math.max(42, Math.round(medianPaperLum * 0.42));
+      const mapSX = (sw - 1) / Math.max(1, w - 1), mapSY = (sh - 1) / Math.max(1, h - 1);
+      const normR = new Uint8Array(pixelCount), normG = new Uint8Array(pixelCount), normB = new Uint8Array(pixelCount);
+      const normLumArr = new Float32Array(pixelCount);
+
+      for (let y = 0; y < h; y++) {
+        const fy = y * mapSY, y0 = Math.floor(fy), y1 = y0 < sh - 1 ? y0 + 1 : y0, wy = fy - y0;
+        const r0 = y0 * sw, r1 = y1 * sw, pRow = y * w;
+        for (let x = 0; x < w; x++) {
+          const fx = x * mapSX, x0 = Math.floor(fx), x1 = x0 < sw - 1 ? x0 + 1 : x0, wx = fx - x0;
+          const w00 = (1 - wx) * (1 - wy), w10 = wx * (1 - wy), w01 = (1 - wx) * wy, w11 = wx * wy;
+          const i00 = r0 + x0, i10 = r0 + x1, i01 = r1 + x0, i11 = r1 + x1;
+          const lBgR = Math.max(minSafeBg, w00 * bgR[i00] + w10 * bgR[i10] + w01 * bgR[i01] + w11 * bgR[i11]);
+          const lBgG = Math.max(minSafeBg, w00 * bgG[i00] + w10 * bgG[i10] + w01 * bgG[i01] + w11 * bgG[i11]);
+          const lBgB = Math.max(minSafeBg, w00 * bgB[i00] + w10 * bgB[i10] + w01 * bgB[i01] + w11 * bgB[i11]);
+          const p = pRow + x, idx = p * 4;
+          let nr = Math.min(255, (data[idx] * 255) / lBgR);
+          let ng = Math.min(255, (data[idx + 1] * 255) / lBgG);
+          let nb = Math.min(255, (data[idx + 2] * 255) / lBgB);
+          normR[p] = Math.round(nr); normG[p] = Math.round(ng); normB[p] = Math.round(nb);
+          normLumArr[p] = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+          data[idx] = normR[p]; data[idx + 1] = normG[p]; data[idx + 2] = normB[p];
+        }
+      }
+
+      const rawPre = filterType === 'bw_clean' ? Math.min(sharpness, 40) : filterType === 'text_enhance' ? Math.max(20, Math.min(80, sharpness)) : Math.max(15, Math.min(75, sharpness));
+      const preSharp = Math.round(rawPre * 0.48);
+      if (preSharp > 0) {
+        applyConvolutionSharpness(data, w, h, preSharp);
+        for (let p = 0; p < pixelCount; p++) {
+          const idx = p * 4;
+          normR[p] = data[idx]; normG[p] = data[idx + 1]; normB[p] = data[idx + 2];
+          normLumArr[p] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+        }
+      }
+
+      const localMeanArr = computeLocalMeanLuminance(normLumArr, w, h, 3);
+      for (let p = 0; p < pixelCount; p++) {
+        const idx = p * 4;
+        let nr = normR[p], ng = normG[p], nb = normB[p];
+        const normLum = normLumArr[p], strokeDepth = localMeanArr[p] - normLum;
+        const maxC = Math.max(nr, ng, nb), minC = Math.min(nr, ng, nb), chroma = maxC - minC;
+        const satRatio = maxC > 0 ? chroma / maxC : 0;
+        const isGenuineColor = chroma >= 32 || (chroma >= 22 && satRatio >= 0.24);
+        const isPaperSurface = strokeDepth < 8 && normLum >= 190 && satRatio < 0.22 && chroma < 42;
+
+        if (filterType === 'magic_color') {
+          if (isPaperSurface) {
+            if (normLum >= 200) { nr = ng = nb = 255; }
+            else { const t = (normLum - 190) / 10, sm = t * t * (3 - 2 * t); nr = ng = nb = 222 + sm * 33; }
+          } else if (isGenuineColor) {
+            const adj = Math.max(0, Math.min(238, normLum * 0.94 - Math.max(0, strokeDepth * 0.18)));
+            const sc = normLum > 2 ? adj / normLum : 1;
+            const bR = nr * sc, bG = ng * sc, bB = nb * sc, gL = 0.299 * bR + 0.587 * bG + 0.114 * bB, sat = 1.95;
+            nr = gL + (bR - gL) * sat; ng = gL + (bG - gL) * sat; nb = gL + (bB - gL) * sat;
+          } else if (strokeDepth < 6 && normLum >= 172) {
+            nr = ng = nb = normLum >= 186 ? 255 : Math.round(215 + ((normLum - 172) / 14) * 40);
+          } else {
+            const eff = normLum - Math.max(0, (strokeDepth - 8) * 1.25);
+            let out;
+            if (eff <= 145) { const t = Math.max(0, (eff - 25) / 120); out = Math.round(t * t * 18); }
+            else if (eff >= 208) out = 255;
+            else { const t = (eff - 145) / 63, sm = t * t * (3 - 2 * t); out = Math.round(18 + sm * 237); }
+            nr = ng = nb = out;
+          }
+          data[idx] = Math.max(0, Math.min(255, Math.round(nr)));
+          data[idx + 1] = Math.max(0, Math.min(255, Math.round(ng)));
+          data[idx + 2] = Math.max(0, Math.min(255, Math.round(nb)));
+        } else if (filterType === 'text_enhance') {
+          if (isPaperSurface) {
+            if (normLum >= 198) { data[idx] = data[idx + 1] = data[idx + 2] = 255; }
+            else { const t = (normLum - 190) / 8, sm = t * t * (3 - 2 * t); data[idx] = data[idx + 1] = data[idx + 2] = Math.round(224 + sm * 31); }
+          } else if (isGenuineColor) {
+            const adj = Math.max(0, Math.min(236, normLum * 0.92 - Math.max(0, strokeDepth * 0.2)));
+            const sc = normLum > 2 ? adj / normLum : 1;
+            const bR = nr * sc, bG = ng * sc, bB = nb * sc, gL = 0.299 * bR + 0.587 * bG + 0.114 * bB, sat = 1.75;
+            data[idx] = Math.max(0, Math.min(255, Math.round(gL + (bR - gL) * sat)));
+            data[idx + 1] = Math.max(0, Math.min(255, Math.round(gL + (bG - gL) * sat)));
+            data[idx + 2] = Math.max(0, Math.min(255, Math.round(gL + (bB - gL) * sat)));
+          } else if (strokeDepth < 6 && normLum >= 170) {
+            data[idx] = data[idx + 1] = data[idx + 2] = normLum >= 184 ? 255 : Math.round(215 + ((normLum - 170) / 14) * 40);
+          } else {
+            const eff = normLum - Math.max(0, (strokeDepth - 7) * 1.35);
+            let out;
+            if (eff <= 148) { const t = Math.max(0, (eff - 25) / 123); out = Math.round(t * t * 14); }
+            else if (eff >= 206) out = 255;
+            else { const t = (eff - 148) / 58, sm = t * t * (3 - 2 * t); out = Math.round(14 + sm * 241); }
+            data[idx] = data[idx + 1] = data[idx + 2] = out;
+          }
+        } else {
+          let out;
+          if (strokeDepth < 7 && normLum >= 190) {
+            if (normLum >= 198) out = 255;
+            else { const t = (normLum - 190) / 8, sm = t * t * (3 - 2 * t); out = Math.round(224 + sm * 31); }
+          } else {
+            const eff = normLum - Math.max(0, (strokeDepth - 7) * 1.4);
+            if (eff <= 150) { const t = Math.max(0, (eff - 25) / 125); out = Math.round(t * t * 12); }
+            else if (eff >= 208) out = 255;
+            else { const t = (eff - 150) / 58, sm = t * t * (3 - 2 * t); out = Math.round(12 + sm * 243); }
+          }
+          data[idx] = data[idx + 1] = data[idx + 2] = out;
+        }
+      }
+    }
+
+    function applyFilterToUrl(srcUrl, filterType, sharpness) {
+      return new Promise((resolve) => {
+        if (filterType === 'original' && sharpness === 0) return resolve(srcUrl);
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || img.width;
+          c.height = img.naturalHeight || img.height;
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+          const imgData = ctx.getImageData(0, 0, c.width, c.height);
+          processImageDataFilter(imgData.data, c.width, c.height, filterType, sharpness);
+          ctx.putImageData(imgData, 0, 0);
+          const out = c.toDataURL('image/jpeg', 0.92);
+          c.width = 0; c.height = 0;
+          resolve(out);
+        };
+        img.src = srcUrl;
+      });
+    }
+
+    // ==================== FILTER STEP ====================
+    function openFilterView() {
+      document.getElementById('cropSection').classList.add('hidden');
+      document.getElementById('filterSection').classList.remove('hidden');
+      const badge = document.getElementById('filterBatchBadge');
+      badge.textContent = pendingCroppedBatch.length > 1
+        ? `सभी ${pendingCroppedBatch.length} पेजों पर फ़िल्टर लागू करें`
+        : 'टेक्स्ट एन्हांस व शार्पनेस';
+      setFilterPreset(activeFilter);
+    }
+
+    function backToCropFromFilter() {
+      if (pendingCroppedBatch.length > 1) {
+        pendingCropIndex = pendingCroppedBatch.length - 1;
+        const last = pendingCroppedBatch.pop();
+        openCropView(last.raw, last.corners);
+        return;
+      }
+      openCropView(currentRawImage, corners);
+    }
+
+    function setFilterPreset(filter) {
+      activeFilter = filter;
+      ['magic_color', 'text_enhance', 'bw_clean', 'original', 'grayscale'].forEach(f => {
+        const btn = document.getElementById('btnFilter_' + f);
+        if (!btn) return;
+        btn.className = f === filter
+          ? "p-2.5 rounded-xl border-2 border-indigo-600 bg-indigo-50/80 text-left cursor-pointer"
+          : "p-2.5 rounded-xl border border-slate-200 bg-white text-left cursor-pointer";
+      });
+      applyActiveFilter();
+    }
+
+    function onSharpnessChange(val) {
+      currentSharpness = Number(val);
+      document.getElementById('sharpnessVal').innerText = val + '%';
+      applyActiveFilter();
+    }
+
+    function setSharpness(val) {
+      document.getElementById('sharpnessInput').value = val;
+      onSharpnessChange(val);
+    }
+
+    function applyActiveFilter() {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.getElementById('filterCanvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        processImageDataFilter(imgData.data, canvas.width, canvas.height, activeFilter, currentSharpness);
+        ctx.putImageData(imgData, 0, 0);
+      };
+      img.src = currentCroppedImage;
+    }
+
+    function rotateFilterImage() {
+      rotateDataUrl(currentCroppedImage, 90).then(rotated => {
+        currentCroppedImage = rotated;
+        applyActiveFilter();
+      });
+    }
+
+    async function savePageToDocument() {
+      if (pendingCroppedBatch.length > 1) {
+        showToast('सभी पेजों पर फ़िल्टर लागू हो रहा है...');
+        const startIdx = pages.length;
+        for (let i = 0; i < pendingCroppedBatch.length; i++) {
+          const item = pendingCroppedBatch[i];
+          const filteredUrl = await applyFilterToUrl(item.cropped, activeFilter, currentSharpness);
+          pages.push({
+            id: 'page-' + Date.now() + '-' + i,
+            originalDataUrl: item.raw,
+            croppedDataUrl: item.cropped,
+            filteredDataUrl: filteredUrl,
+            filter: activeFilter,
+            cropCorners: item.corners,
+            rotation: 0
+          });
+        }
+        pendingCropQueue = [];
+        pendingCropIndex = -1;
+        pendingCroppedBatch = [];
+        activePageIndex = startIdx;
+        renderPagesTray();
+        showOperationalStudio();
+        showToast(`सभी ${pages.length - startIdx} पेज सेव हो गए`);
+        return;
+      }
+
+      const canvas = document.getElementById('filterCanvas');
+      const filteredUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      if (editingPageId) {
+        pages = pages.map(p => p.id === editingPageId ? {
+          ...p,
+          croppedDataUrl: currentCroppedImage,
+          filteredDataUrl: filteredUrl,
+          filter: activeFilter,
+          cropCorners: JSON.parse(JSON.stringify(corners))
+        } : p);
+        editingPageId = null;
+      } else {
+        pages.push({
+          id: 'page-' + Date.now(),
+          originalDataUrl: currentRawImage,
+          croppedDataUrl: currentCroppedImage,
+          filteredDataUrl: filteredUrl,
+          filter: activeFilter,
+          cropCorners: JSON.parse(JSON.stringify(corners)),
+          rotation: 0
+        });
+        activePageIndex = pages.length - 1;
+      }
+      pendingCropQueue = [];
+      pendingCropIndex = -1;
+      pendingCroppedBatch = [];
+      renderPagesTray();
+      showOperationalStudio();
+    }
+
+    // ==================== OPERATIONAL WORKSPACE ====================
+    function showOperationalStudio() {
+      document.getElementById('captureSection').classList.add('hidden');
+      document.getElementById('cropSection').classList.add('hidden');
+      document.getElementById('filterSection').classList.add('hidden');
+      document.getElementById('operationalStudio').classList.remove('hidden');
+
+      const activePage = pages[activePageIndex] || pages[0];
+      if (activePage) {
+        document.getElementById('studioPreviewImg').src = activePage.filteredDataUrl || activePage.croppedDataUrl || activePage.originalDataUrl;
+        document.getElementById('studioPageIndicator').innerText = `${activePageIndex + 1} / ${pages.length}`;
+      }
+    }
+
+    function renderPagesTray() {
+      const tray = document.getElementById('pagesTray');
+      const badge = document.getElementById('trayCountBadge');
+      const headerBtn = document.getElementById('btnExportAllPdf');
+      const headerCount = document.getElementById('headerPageCount');
+      const thumbs = document.getElementById('trayThumbnails');
+
+      if (pages.length === 0) {
+        tray.classList.add('hidden');
+        headerBtn.classList.add('hidden');
+        headerBtn.classList.remove('flex');
+        return;
+      }
+
+      tray.classList.remove('hidden');
+      headerBtn.classList.remove('hidden');
+      headerBtn.classList.add('flex');
+      badge.innerText = `${pages.length} पेज`;
+      headerCount.innerText = pages.length;
+
+      thumbs.innerHTML = '';
+      pages.forEach((p, idx) => {
+        const isCurrent = idx === activePageIndex;
+        const card = document.createElement('div');
+        card.className = `shrink-0 w-24 p-1.5 rounded-xl border flex flex-col gap-1 cursor-pointer ${isCurrent ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200 bg-slate-50'}`;
+        card.onclick = () => {
+          activePageIndex = idx;
+          renderPagesTray();
+          showOperationalStudio();
+        };
+        const imgUrl = p.filteredDataUrl || p.croppedDataUrl || p.originalDataUrl;
+        card.innerHTML = `
+          <div class="aspect-[3/4] bg-white rounded overflow-hidden border border-slate-200">
+            <img src="${imgUrl}" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between text-[10px] font-bold text-slate-700">
+            <span>#${idx + 1}</span>
+            <span class="text-indigo-600">${isCurrent ? 'सक्रिय' : ''}</span>
+          </div>
+        `;
+        thumbs.appendChild(card);
+      });
+    }
+
+    function navigatePage(dir) {
+      activePageIndex = Math.max(0, Math.min(pages.length - 1, activePageIndex + dir));
+      renderPagesTray();
+      showOperationalStudio();
+    }
+
+    function openAddPageModal() {
+      document.getElementById('operationalStudio').classList.add('hidden');
+      document.getElementById('captureSection').classList.remove('hidden');
+    }
+
+    function reEditActivePageCrop() {
+      const page = pages[activePageIndex];
+      if (!page) return;
+      editingPageId = page.id;
+      pendingCropQueue = [];
+      pendingCropIndex = -1;
+      pendingCroppedBatch = [];
+      openCropView(page.originalDataUrl, page.cropCorners);
+    }
+
+    function reEditActivePageFilter() {
+      const page = pages[activePageIndex];
+      if (!page) return;
+      editingPageId = page.id;
+      pendingCropQueue = [];
+      pendingCropIndex = -1;
+      pendingCroppedBatch = [];
+      currentRawImage = page.originalDataUrl;
+      currentCroppedImage = page.croppedDataUrl || page.originalDataUrl;
+      activeFilter = page.filter || 'magic_color';
+      openFilterView();
+    }
+
+    function rotateActivePage() {
+      const page = pages[activePageIndex];
+      if (!page) return;
+      rotateDataUrl(page.filteredDataUrl, 90).then(rotated => {
+        page.filteredDataUrl = rotated;
+        showOperationalStudio();
+        renderPagesTray();
+      });
+    }
+
+    function downloadActivePageJpg() {
+      const page = pages[activePageIndex];
+      if (!page) return;
+      downloadDataUrl(page.filteredDataUrl, `scan-page-${activePageIndex + 1}.jpg`);
+    }
+
+    function deleteActivePage() {
+      pages.splice(activePageIndex, 1);
+      activePageIndex = Math.max(0, activePageIndex - 1);
+      renderPagesTray();
+      if (pages.length > 0) {
+        showOperationalStudio();
+      } else {
+        document.getElementById('operationalStudio').classList.add('hidden');
+        document.getElementById('captureSection').classList.remove('hidden');
+      }
+      showToast('पेज हटाया गया');
+    }
+
+    function clearAllPages() {
+      pages = [];
+      activePageIndex = 0;
+      renderPagesTray();
+      document.getElementById('operationalStudio').classList.add('hidden');
+      document.getElementById('captureSection').classList.remove('hidden');
+      showToast('सभी पेज हटाए गए');
+    }
+
+    function exportToPdf() {
+      if (pages.length === 0) { showToast('दस्तावेज़ में कम से कम 1 पेज होना चाहिए'); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p', 'mm', 'a4');
+      pages.forEach((p, idx) => {
+        if (idx > 0) doc.addPage('a4', 'p');
+        const img = p.filteredDataUrl || p.croppedDataUrl || p.originalDataUrl;
+        doc.addImage(img, 'JPEG', 5, 5, 200, 287);
+      });
+      doc.save(`Scanned-Document-${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+
+    function rotateDataUrl(src, deg) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalHeight || img.height;
+          canvas.height = img.naturalWidth || img.width;
+          const ctx = canvas.getContext('2d');
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate((deg * Math.PI) / 180);
+          ctx.drawImage(img, -(img.naturalWidth || img.width) / 2, -(img.naturalHeight || img.height) / 2);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = src;
+      });
+    }
+
+    function downloadDataUrl(dataUrl, filename) {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function downloadFilteredJpg() {
+      const canvas = document.getElementById('filterCanvas');
+      downloadDataUrl(canvas.toDataURL('image/jpeg', 0.92), `scan-${Date.now()}.jpg`);
+    }
+  </script>
+</body>
+</html>
